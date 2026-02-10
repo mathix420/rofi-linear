@@ -20,6 +20,8 @@ pkgver() {
 
 build() {
     cd rofi-linear
+    export CC=gcc
+    export CXX=g++
     cargo build --release --locked
 }
 
