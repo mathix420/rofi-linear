@@ -6,6 +6,10 @@ description = "Rofi plugin for creating Linear issues"
 authors = ["mathix"]
 license = "MIT"
 
+[features]
+default = []
+vendored-tls = ["reqwest/native-tls-vendored"]
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
