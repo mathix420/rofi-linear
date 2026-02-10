@@ -69,15 +69,22 @@ jobs:
             esac
           fi
 
-      - name: Generate PR body
+      - name: Generate PR title and body
+        id: generate
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BASE_BRANCH: ${{ steps.pr-config.outputs.base }}
-          PR_TITLE: ${{ steps.pr-config.outputs.title }}
+          FALLBACK_TITLE: ${{ steps.pr-config.outputs.title }}
         run: |
           chmod +x .github/scripts/collect-changes.sh .github/scripts/generate-pr-body.sh
           .github/scripts/collect-changes.sh "$BASE_BRANCH" > /tmp/changes.txt
-          .github/scripts/generate-pr-body.sh /tmp/changes.txt "$PR_TITLE" > /tmp/body.md
+          .github/scripts/generate-pr-body.sh /tmp/changes.txt "$FALLBACK_TITLE" "both" > /tmp/output.txt
+
+          # Parse title and body from output
+          TITLE=$(grep "^TITLE:" /tmp/output.txt | sed 's/^TITLE://')
+          sed -n '/^BODY_START$/,$ p' /tmp/output.txt | tail -n +2 > /tmp/body.md
+
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
 
       - name: Check for existing PR
         id: check-pr
@@ -90,11 +97,12 @@ jobs:
       - name: Create or update PR
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_TITLE: ${{ steps.generate.outputs.title }}
         run: |
           if [ -n "${{ steps.check-pr.outputs.existing }}" ]; then
             echo "PR #${{ steps.check-pr.outputs.existing }} already exists, updating..."
             gh pr edit "${{ steps.check-pr.outputs.existing }}" \
-              --title "${{ steps.pr-config.outputs.title }}" \
+              --title "$PR_TITLE" \
               --body-file /tmp/body.md
           else
             DRAFT_FLAG=""
@@ -105,7 +113,7 @@ jobs:
             gh pr create \
               --base "${{ steps.pr-config.outputs.base }}" \
               --head "${{ steps.pr-config.outputs.branch }}" \
-              --title "${{ steps.pr-config.outputs.title }}" \
+              --title "$PR_TITLE" \
               --body-file /tmp/body.md \
               $DRAFT_FLAG
           fi
