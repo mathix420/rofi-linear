@@ -37,13 +37,16 @@ jobs:
       - name: Generate .SRCINFO
         run: |
           cd aur-repo
-          docker run --rm -v "$PWD:/pkg" archlinux:latest bash -c '
-            pacman -Sy --noconfirm pacman-contrib sudo
-            useradd -m builder
+          HOST_UID=$(id -u)
+          HOST_GID=$(id -g)
+          docker run --rm -v "$PWD:/pkg:rw" archlinux:latest bash -c "
+            pacman -Sy --noconfirm pacman-contrib
+            useradd -m -u $HOST_UID builder
             chown -R builder:builder /pkg
             cd /pkg
-            su builder -c "makepkg --printsrcinfo" > .SRCINFO
-          '
+            su builder -c 'makepkg --printsrcinfo' > .SRCINFO
+            chown -R $HOST_UID:$HOST_GID /pkg
+          "
 
       - name: Commit and push
         run: |
