@@ -17,33 +17,52 @@ fn notify(summary: &str, body: &str) -> bool {
     }
 }
 
-pub async fn run(team: Option<String>, quick: bool, open_issue: bool) -> Result<()> {
+pub async fn run(team: Option<String>, quick: bool, open_issue: bool, multi_team: bool) -> Result<()> {
     // Check for API key
     let api_key = config::get_api_key()?.context(
         "No API key found. Run 'rofi-linear auth' first.",
     )?;
 
     // Get the team to use
-    let (_team_alias, team_config) = match team {
-        Some(ref t) => config::get_team(Some(t))?,
-        None => {
-            let teams = config::list_teams()?;
-            match teams.len() {
-                0 => {
-                    rofi::error("No teams linked. Run 'rofi-linear link' first.")?;
-                    return Ok(());
-                }
-                1 => Some(teams.into_iter().next().unwrap()),
-                _ => {
-                    // Multiple teams - prompt for selection
-                    let options: Vec<String> = teams
-                        .iter()
-                        .map(|(alias, t)| format!("{} ({})", alias, t.name))
-                        .collect();
+    let (_team_alias, team_config) = if multi_team {
+        // Multi-team mode - always prompt for team selection
+        let teams = config::list_teams()?;
+        if teams.is_empty() {
+            rofi::error("No teams linked. Run 'rofi-linear link' first.")?;
+            return Ok(());
+        }
 
-                    match rofi::select("Team", &options)? {
-                        Some(idx) => Some(teams.into_iter().nth(idx).unwrap()),
-                        None => return Ok(()), // User cancelled
+        let options: Vec<String> = teams
+            .iter()
+            .map(|(alias, t)| format!("{} ({})", alias, t.name))
+            .collect();
+
+        match rofi::select("Team", &options)? {
+            Some(idx) => Some(teams.into_iter().nth(idx).unwrap()),
+            None => return Ok(()), // User cancelled
+        }
+    } else {
+        match team {
+            Some(ref t) => config::get_team(Some(t))?,
+            None => {
+                let teams = config::list_teams()?;
+                match teams.len() {
+                    0 => {
+                        rofi::error("No teams linked. Run 'rofi-linear link' first.")?;
+                        return Ok(());
+                    }
+                    1 => Some(teams.into_iter().next().unwrap()),
+                    _ => {
+                        // Multiple teams - prompt for selection
+                        let options: Vec<String> = teams
+                            .iter()
+                            .map(|(alias, t)| format!("{} ({})", alias, t.name))
+                            .collect();
+
+                        match rofi::select("Team", &options)? {
+                            Some(idx) => Some(teams.into_iter().nth(idx).unwrap()),
+                            None => return Ok(()), // User cancelled
+                        }
                     }
                 }
             }

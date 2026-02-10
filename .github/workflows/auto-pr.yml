@@ -1,0 +1,96 @@
+name: Auto PR
+
+on:
+  push:
+    branches:
+      - dev
+      - 'feature/**'
+      - 'fix/**'
+      - 'refactor/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine PR settings
+        id: pr-config
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+          if [ "$BRANCH" = "dev" ]; then
+            echo "base=master" >> $GITHUB_OUTPUT
+            echo "title=🚀 Release: master ⬅️ dev" >> $GITHUB_OUTPUT
+            echo "draft=false" >> $GITHUB_OUTPUT
+          else
+            echo "base=dev" >> $GITHUB_OUTPUT
+            echo "draft=true" >> $GITHUB_OUTPUT
+
+            # Determine emoji based on branch prefix
+            case "$BRANCH" in
+              feature/*)
+                FEATURE_NAME="${BRANCH#feature/}"
+                echo "title=✨ Feature: $FEATURE_NAME" >> $GITHUB_OUTPUT
+                ;;
+              fix/*)
+                FIX_NAME="${BRANCH#fix/}"
+                echo "title=🐛 Fix: $FIX_NAME" >> $GITHUB_OUTPUT
+                ;;
+              refactor/*)
+                REFACTOR_NAME="${BRANCH#refactor/}"
+                echo "title=🔧 Refactor: $REFACTOR_NAME" >> $GITHUB_OUTPUT
+                ;;
+              *)
+                echo "title=📝 $BRANCH" >> $GITHUB_OUTPUT
+                ;;
+            esac
+          fi
+
+      - name: Generate PR body
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BASE_BRANCH: ${{ steps.pr-config.outputs.base }}
+          PR_TITLE: ${{ steps.pr-config.outputs.title }}
+        run: |
+          chmod +x .github/scripts/collect-changes.sh .github/scripts/generate-pr-body.sh
+          .github/scripts/collect-changes.sh "$BASE_BRANCH" > /tmp/changes.txt
+          .github/scripts/generate-pr-body.sh /tmp/changes.txt "$PR_TITLE" > /tmp/body.md
+
+      - name: Check for existing PR
+        id: check-pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          EXISTING=$(gh pr list --head "${{ steps.pr-config.outputs.branch }}" --base "${{ steps.pr-config.outputs.base }}" --json number --jq '.[0].number // empty')
+          echo "existing=$EXISTING" >> $GITHUB_OUTPUT
+
+      - name: Create or update PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -n "${{ steps.check-pr.outputs.existing }}" ]; then
+            echo "PR #${{ steps.check-pr.outputs.existing }} already exists, updating..."
+            gh pr edit "${{ steps.check-pr.outputs.existing }}" \
+              --title "${{ steps.pr-config.outputs.title }}" \
+              --body-file /tmp/body.md
+          else
+            DRAFT_FLAG=""
+            if [ "${{ steps.pr-config.outputs.draft }}" = "true" ]; then
+              DRAFT_FLAG="--draft"
+            fi
+
+            gh pr create \
+              --base "${{ steps.pr-config.outputs.base }}" \
+              --head "${{ steps.pr-config.outputs.branch }}" \
+              --title "${{ steps.pr-config.outputs.title }}" \
+              --body-file /tmp/body.md \
+              $DRAFT_FLAG
+          fi

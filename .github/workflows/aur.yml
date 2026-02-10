@@ -1,0 +1,60 @@
+name: AUR Deploy
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  aur-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.AUR_SSH_KEY }}" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+          cat >> ~/.ssh/config << EOF
+          Host aur.archlinux.org
+            IdentityFile ~/.ssh/aur
+            User aur
+          EOF
+
+      - name: Clone AUR repo
+        run: |
+          git clone ssh://aur@aur.archlinux.org/rofi-linear-git.git aur-repo
+          cd aur-repo
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+      - name: Update PKGBUILD
+        run: |
+          cd aur-repo
+          # Update pkgver in PKGBUILD
+          sed -i "s/^pkgver=.*/pkgver=${{ steps.version.outputs.version }}/" PKGBUILD
+          # Increment pkgrel or reset to 1
+          sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
+
+      - name: Generate .SRCINFO
+        run: |
+          cd aur-repo
+          docker run --rm -v "$PWD:/pkg" archlinux:latest bash -c "
+            pacman -Sy --noconfirm pacman-contrib
+            cd /pkg
+            makepkg --printsrcinfo > .SRCINFO
+          "
+
+      - name: Commit and push
+        run: |
+          cd aur-repo
+          git add PKGBUILD .SRCINFO
+          git commit -m "Update to v${{ steps.version.outputs.version }}"
+          git push

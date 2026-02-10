@@ -37,6 +37,9 @@ enum Commands {
         /// Open issue in browser after creation
         #[arg(short, long)]
         open_issue: bool,
+        /// Multi-team mode - always prompt for team selection
+        #[arg(short, long)]
+        multi_team: bool,
     },
 }
 
@@ -53,6 +56,7 @@ async fn main() -> Result<()> {
             team,
             quick,
             open_issue,
-        } => commands::run::run(team, quick, open_issue).await,
+            multi_team,
+        } => commands::run::run(team, quick, open_issue, multi_team).await,
     }
 }
