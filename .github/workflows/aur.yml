@@ -4,36 +4,12 @@ on:
   release:
     types: [published]
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to deploy (without v prefix, e.g. 0.1.0-r42.abc1234). Leave empty to use latest release.'
-        required: false
-        type: string
 
 jobs:
   aur-publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Get version
-        id: version
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            if [ -n "${{ inputs.version }}" ]; then
-              VERSION="${{ inputs.version }}"
-            else
-              # Fetch latest release tag
-              VERSION=$(gh release view --json tagName --jq '.tagName' | sed 's/^v//')
-            fi
-          else
-            # Triggered by release event
-            VERSION="${GITHUB_REF#refs/tags/v}"
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Deploying version: $VERSION"
 
       - name: Setup SSH
         run: |
@@ -54,13 +30,9 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
 
-      - name: Update PKGBUILD
+      - name: Sync PKGBUILD
         run: |
-          cd aur-repo
-          # Update pkgver in PKGBUILD
-          sed -i "s/^pkgver=.*/pkgver=${{ steps.version.outputs.version }}/" PKGBUILD
-          # Increment pkgrel or reset to 1
-          sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
+          cp PKGBUILD aur-repo/PKGBUILD
 
       - name: Generate .SRCINFO
         run: |
@@ -77,5 +49,6 @@ jobs:
         run: |
           cd aur-repo
           git add PKGBUILD .SRCINFO
-          git commit -m "Update to v${{ steps.version.outputs.version }}"
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          git commit -m "Sync PKGBUILD from GitHub"
           git push
