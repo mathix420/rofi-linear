@@ -1,13 +1,15 @@
 name: AUR Deploy
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
   workflow_dispatch:
 
 jobs:
   aur-publish:
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -30,9 +32,13 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
 
-      - name: Sync PKGBUILD
+      - name: Sync PKGBUILD and update pkgver
         run: |
+          # Compute pkgver using same logic as pkgver() in PKGBUILD
+          PKGVER="0.1.0.r$(git rev-list --count HEAD).$(git rev-parse --short HEAD)"
+          echo "PKGVER=$PKGVER" >> $GITHUB_ENV
           cp PKGBUILD aur-repo/PKGBUILD
+          sed -i "s/^pkgver=.*/pkgver=$PKGVER/" aur-repo/PKGBUILD
 
       - name: Generate .SRCINFO
         run: |
@@ -52,6 +58,5 @@ jobs:
         run: |
           cd aur-repo
           git add PKGBUILD .SRCINFO
-          git diff --cached --quiet && echo "No changes to commit" && exit 0
-          git commit -m "Sync PKGBUILD from GitHub"
+          git commit -m "Update to ${{ env.PKGVER }}"
           git push
