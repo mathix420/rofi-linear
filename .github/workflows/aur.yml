@@ -66,9 +66,11 @@ jobs:
         run: |
           cd aur-repo
           docker run --rm -v "$PWD:/pkg" archlinux:latest bash -c "
-            pacman -Sy --noconfirm pacman-contrib
+            pacman -Sy --noconfirm pacman-contrib sudo
+            useradd -m builder
+            chown -R builder:builder /pkg
             cd /pkg
-            makepkg --printsrcinfo > .SRCINFO
+            sudo -u builder makepkg --printsrcinfo > .SRCINFO
           "
 
       - name: Commit and push
