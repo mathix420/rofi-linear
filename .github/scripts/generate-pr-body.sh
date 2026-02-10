@@ -1,9 +1,11 @@
 #!/bin/bash
 # Generate PR body with optional Claude AI enhancement
-# Usage: generate-pr-body.sh "<changes>" "<title>"
+# Usage: generate-pr-body.sh <changes_file> "<title>"
 
-CHANGES="$1"
+CHANGES_FILE="$1"
 TITLE="$2"
+
+CHANGES=$(cat "$CHANGES_FILE")
 
 # If no API key, use simple format
 if [ -z "$ANTHROPIC_API_KEY" ]; then
@@ -36,7 +38,7 @@ Write a PR description with:
 Keep it concise. Use markdown formatting. Do not include a title - just the body content."
 
 # Escape the prompt for JSON
-ESCAPED_PROMPT=$(echo "$PROMPT" | jq -Rs '.')
+ESCAPED_PROMPT=$(printf '%s' "$PROMPT" | jq -Rs '.')
 
 RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
     -H "Content-Type: application/json" \
