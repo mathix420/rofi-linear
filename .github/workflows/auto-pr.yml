@@ -7,6 +7,8 @@ on:
       - 'feature/**'
       - 'fix/**'
       - 'refactor/**'
+      - 'docs/**'
+      - 'chore/**'
 
 permissions:
   contents: read
@@ -26,30 +28,43 @@ jobs:
           BRANCH="${GITHUB_REF#refs/heads/}"
           echo "branch=$BRANCH" >> $GITHUB_OUTPUT
 
+          # Helper to convert branch name to title (kebab-case to sentence)
+          to_title() {
+            echo "$1" | sed 's/-/ /g'
+          }
+
           if [ "$BRANCH" = "dev" ]; then
             echo "base=master" >> $GITHUB_OUTPUT
-            echo "title=🚀 Release: master ⬅️ dev" >> $GITHUB_OUTPUT
             echo "draft=false" >> $GITHUB_OUTPUT
+            echo "title=chore: release" >> $GITHUB_OUTPUT
           else
             echo "base=dev" >> $GITHUB_OUTPUT
             echo "draft=true" >> $GITHUB_OUTPUT
 
-            # Determine emoji based on branch prefix
+            # Generate conventional commit style title based on branch prefix
             case "$BRANCH" in
               feature/*)
-                FEATURE_NAME="${BRANCH#feature/}"
-                echo "title=✨ Feature: $FEATURE_NAME" >> $GITHUB_OUTPUT
+                NAME=$(to_title "${BRANCH#feature/}")
+                echo "title=feat: $NAME" >> $GITHUB_OUTPUT
                 ;;
               fix/*)
-                FIX_NAME="${BRANCH#fix/}"
-                echo "title=🐛 Fix: $FIX_NAME" >> $GITHUB_OUTPUT
+                NAME=$(to_title "${BRANCH#fix/}")
+                echo "title=fix: $NAME" >> $GITHUB_OUTPUT
                 ;;
               refactor/*)
-                REFACTOR_NAME="${BRANCH#refactor/}"
-                echo "title=🔧 Refactor: $REFACTOR_NAME" >> $GITHUB_OUTPUT
+                NAME=$(to_title "${BRANCH#refactor/}")
+                echo "title=refactor: $NAME" >> $GITHUB_OUTPUT
+                ;;
+              docs/*)
+                NAME=$(to_title "${BRANCH#docs/}")
+                echo "title=docs: $NAME" >> $GITHUB_OUTPUT
+                ;;
+              chore/*)
+                NAME=$(to_title "${BRANCH#chore/}")
+                echo "title=chore: $NAME" >> $GITHUB_OUTPUT
                 ;;
               *)
-                echo "title=📝 $BRANCH" >> $GITHUB_OUTPUT
+                echo "title=chore: $BRANCH" >> $GITHUB_OUTPUT
                 ;;
             esac
           fi
